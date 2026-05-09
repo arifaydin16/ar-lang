@@ -1,0 +1,8 @@
+const int intVariable = 12
+var string stringVariable = "strvalue"
+const float floatVariable = 3.14
+const bool boolVariable = true
+
+for(const int i = 0; i <= 10;i++){
+    
+}
