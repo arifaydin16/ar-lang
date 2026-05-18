@@ -14,13 +14,17 @@ func IsOperator(let byte) bool {
 	return let == '+' || let == '-' || let == '*' || let == '/' || let == '%'
 }
 
+func isLogicalOperator(let byte) bool {
+	return let == '&' || let == '|'
+}
+
 func IsAssignment(let byte) bool {
 	return let == '='
 }
 func IsComparison(wrd string) bool {
 	return wrd == "==" || wrd == "<=" || wrd == ">=" || wrd == "!="
 }
-func IsComparisonProbability(let byte) bool {
+func HasComparisonProbability(let byte) bool {
 	return let == '=' || let == '<' || let == '>'
 }
 func ContainsNumber(s string) bool {

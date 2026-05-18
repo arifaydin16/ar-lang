@@ -1,156 +1,204 @@
 package arlexer
 
-import (
-	"first-api/utils"
-	"fmt"
-	"strings"
-)
+import "first-api/utils"
 
-func arlexerDefiner(define string, tokens *[]utils.Token) {
-	var result string
-
-	if len(define) > 0 && define[0] == '"' {
-		result = "STRING_LITERAL"
-	} else {
-		switch define {
-		case "const", "var", "int", "float", "bool", "string", "if", "else", "elsif", "return", "for", "while", "true", "false":
-			result = "KEYWORD"
-		case "+", "-", "*", "/":
-			result = "ARITHMETIC"
-		case "=", ":=":
-			result = "ASSIGNMENT"
-		case "--", "++":
-			result = "UNARY"
-		case "==", "!=", "<", ">", "<=", ">=":
-			result = "COMPARISON"
-		case "&&", "||", "!":
-			result = "LOGICAL"
-		case "(", ")":
-			result = "PAREN"
-		case "{", "}":
-			result = "BRACE"
-		case "[", "]":
-			result = "BRACKET"
-		case ",":
-			result = "COMMA"
-		case ";":
-			result = "SEMICOLON"
-		default:
-			// 2. Dinamik Kontroller
-			if utils.IsNumberStr(define) {
-				result = "NUMBER"
-			} else if utils.IsLetter(define[0]) {
-				result = "IDENTIFIER"
-			} else {
-				result = "ILLEGAL"
-			}
-		}
+func defineToken(literal string) string {
+	switch literal {
+	case "const", "var", "int", "float", "bool", "string", "object", "any", "true", "false":
+		return "KEYWORD"
+	case "func":
+		return "FUNCTION"
+	case "return":
+		return "RETURN"
+	case "type":
+		return "TYPEDEF"
+	case "interface":
+		return "INTERFACE"
+	case "import":
+		return "IMPORT"
+	case "export":
+		return "EXPORT"
+	case "default":
+		return "DEFAULT"
+	case "from":
+		return "FROM"
+	case "as":
+		return "AS"
+	case "enum":
+		return "ENUM"
+	case "if", "else", "elsif":
+		return "LOGIC"
+	case "for":
+		return "LOOP"
+	case "+", "-", "*", "/", "%":
+		return "ARITHMETIC"
+	case "=", ":=", "+=", "-=", "*=", "/=":
+		return "ASSIGNMENT"
+	case "--", "++":
+		return "UNARY"
+	case "==", "!=", "<", ">", "<=", ">=":
+		return "COMPARISON"
+	case "&", "|", "!":
+		return "LOGICAL"
+	case "(", ")":
+		return "PAREN"
+	case "{", "}":
+		return "BRACE"
+	case "[", "]":
+		return "BRACKET"
+	case ",":
+		return "COMMA"
+	case ";":
+		return "SEMICOLON"
+	case ":":
+		return "COLON"
+	case ".":
+		return "DOT"
 	}
 
+	if len(literal) > 0 && literal[0] == '"' {
+		return "STRING_LITERAL"
+	}
+	if utils.IsNumberStr(literal) || (len(literal) > 1 && literal[0] == '-' && utils.IsNumberStr(literal[1:])) {
+		return "NUMBER"
+	}
+	if len(literal) > 0 && utils.IsLetter(literal[0]) {
+		return "IDENTIFIER"
+	}
+	return "ILLEGAL"
+}
+
+func appendToken(tokens *[]utils.Token, literal string, file string, line int, column int) {
+	if literal == "" {
+		return
+	}
 	*tokens = append(*tokens, utils.Token{
-		Type:    result,
-		Literal: define,
+		Type:    defineToken(literal),
+		Literal: literal,
+		File:    file,
+		Line:    line,
+		Column:  column,
 	})
 }
 
+func isIdentifierChar(ch byte) bool {
+	return utils.IsLetter(ch) || (ch >= '0' && ch <= '9')
+}
+
+func canStartNegativeNumber(tokens []utils.Token) bool {
+	if len(tokens) == 0 {
+		return true
+	}
+	last := tokens[len(tokens)-1]
+	return last.Type == "ASSIGNMENT" || last.Type == "COMPARISON" || last.Type == "LOGICAL" || last.Literal == "(" || last.Literal == "[" || last.Literal == "," || last.Literal == "return"
+}
+
 func Arlexer(line string) []utils.Token {
-	var lineLength int = len(line)
-	var word []rune
+	return ArlexerWithLine(line, 0)
+}
+
+func ArlexerWithLine(line string, lineNumber int) []utils.Token {
+	return ArlexerWithLineAndFile(line, "", lineNumber)
+}
+
+func ArlexerWithLineAndFile(line string, file string, lineNumber int) []utils.Token {
 	var tokens []utils.Token
-	var previousChar byte
-	var isInString bool = false
-	for i := 0; i < lineLength; i++ {
-		if line[i] == '"' {
-			if isInString {
-				// String bitti, tırnağı içeri alıp (veya almayıp) kapatıyoruz
-				word = append(word, rune(line[i]))
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
-				isInString = false
-			} else {
-				// Eğer daha önceden kalan bir word varsa onu gönder
-				if len(word) > 0 {
-					arlexerDefiner(string(word), &tokens)
-					word = []rune{}
-				}
-				isInString = true
-				word = append(word, rune(line[i]))
-			}
-			previousChar = line[i]
-			continue // Tırnak işlemini bitir, sonraki karaktere geç
-		}
-		if isInString {
-			word = append(word, rune(line[i]))
-			previousChar = line[i]
+
+	for i := 0; i < len(line); {
+		ch := line[i]
+		column := i + 1
+
+		if ch == ' ' || ch == '\t' || ch == '\r' {
+			i++
 			continue
 		}
-		if line[i] == ' ' && len(word) > 0 {
-			arlexerDefiner(string(word), &tokens)
-			word = []rune{}
-		} else if utils.IsLetter(line[i]) {
-			if !utils.IsLetter(previousChar) && len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
-			}
-			word = append(word, rune(line[i]))
-			previousChar = line[i]
-		} else if utils.IsNumber(line[i]) {
-			if !utils.IsNumber(previousChar) && len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
-			}
-			word = append(word, rune(line[i]))
-			previousChar = line[i]
-		} else if utils.IsComparisonProbability(line[i]) {
-			if !utils.IsComparisonProbability(previousChar) && len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
-			}
-			var nextLetter = line[i+1]
-			if len(line) > i+1 {
-				var mergedWord string = strings.Trim(string(line[i])+string(nextLetter), " ")
-				if len(mergedWord) == 1 && utils.IsAssignment(mergedWord[0]) && !utils.IsComparisonProbability(previousChar) {
-					arlexerDefiner(mergedWord, &tokens)
-					word = []rune{}
-				} else {
-					if utils.IsComparison(mergedWord) {
-						arlexerDefiner(mergedWord, &tokens)
-						previousChar = line[i]
-						word = []rune{}
-					} else if len(word) > 0 {
-						arlexerDefiner(string(word), &tokens)
-					}
-				}
-			} else if len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-			}
 
-		} else if utils.IsAssignment(line[i]) {
-			if !utils.IsAssignment(previousChar) && len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
+		if ch == '/' && i+1 < len(line) && line[i+1] == '/' {
+			break
+		}
+		if ch == '/' && i+1 < len(line) && line[i+1] == '*' {
+			i += 2
+			for i+1 < len(line) && !(line[i] == '*' && line[i+1] == '/') {
+				i++
 			}
-			word = append(word, rune(line[i]))
-			previousChar = line[i]
-		} else if utils.IsOperator(line[i]) {
-			if !utils.IsOperator(previousChar) && len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
+			if i+1 < len(line) {
+				i += 2
 			}
-			word = append(word, rune(line[i]))
-			previousChar = line[i]
-		} else if utils.IsPunctuation(line[i]) {
-			if len(word) > 0 {
-				arlexerDefiner(string(word), &tokens)
-				word = []rune{}
+			continue
+		}
+
+		if utils.IsLetter(ch) {
+			start := i
+			for i < len(line) && isIdentifierChar(line[i]) {
+				i++
 			}
-			arlexerDefiner(string(line[i]), &tokens)
-			previousChar = line[i]
+			appendToken(&tokens, line[start:i], file, lineNumber, column)
+			continue
+		}
+
+		if utils.IsNumber(ch) || (ch == '-' && i+1 < len(line) && utils.IsNumber(line[i+1]) && canStartNegativeNumber(tokens)) {
+			start := i
+			if ch == '-' {
+				i++
+			}
+			for i < len(line) && utils.IsNumber(line[i]) {
+				i++
+			}
+			appendToken(&tokens, line[start:i], file, lineNumber, column)
+			continue
+		}
+
+		if ch == '"' {
+			start := i
+			i++
+			for i < len(line) {
+				if line[i] == '\\' && i+1 < len(line) {
+					i += 2
+					continue
+				}
+				if line[i] == '"' {
+					i++
+					break
+				}
+				i++
+			}
+			appendToken(&tokens, line[start:i], file, lineNumber, column)
+			continue
+		}
+
+		if i+1 < len(line) {
+			two := line[i : i+2]
+			switch two {
+			case "==", "!=", "<=", ">=", ":=", "++", "--", "+=", "-=", "*=", "/=":
+				appendToken(&tokens, two, file, lineNumber, column)
+				i += 2
+				continue
+			}
+		}
+
+		switch ch {
+		case '+', '-', '*', '/', '%', '=', '<', '>', '&', '|', '!', '(', ')', '{', '}', '[', ']', ',', ';', ':', '.':
+			appendToken(&tokens, string(ch), file, lineNumber, column)
+			i++
+		default:
+			appendToken(&tokens, string(ch), file, lineNumber, column)
+			i++
 		}
 	}
-	if len(word) > 0 {
-		arlexerDefiner(string(word), &tokens)
-	}
-	fmt.Println(tokens)
+
 	return tokens
+}
+
+func EOFToken(lineNumber int) utils.Token {
+	return EOFTokenWithFile("", lineNumber)
+}
+
+func EOFTokenWithFile(file string, lineNumber int) utils.Token {
+	return utils.Token{
+		Type:    "EOF",
+		Literal: "",
+		File:    file,
+		Line:    lineNumber,
+		Column:  0,
+	}
 }

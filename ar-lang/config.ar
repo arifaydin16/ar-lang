@@ -1,0 +1,5 @@
+
+
+const int data = 12;
+
+export default data;
